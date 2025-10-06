@@ -1,6 +1,6 @@
 @Library('Shared') _
 pipeline {
-    agent {label 'Node'}
+    agent any
     
     parameters {
         string(name: 'FRONTEND_DOCKER_TAG', defaultValue: '', description: 'Frontend Docker tag of the image built by the CI job')
@@ -19,7 +19,7 @@ pipeline {
         stage('Git: Code Checkout') {
             steps {
                 script{
-                    code_checkout("https://github.com/LondheShubham153/Wanderlust-Mega-Project.git","main")
+                    git url: "https://github.com/saurabh12571257/Wanderlust-Mega-Project.git", branch: "main"
                 }
             }
         }
@@ -48,7 +48,6 @@ pipeline {
                             sed -i -e s/wanderlust-frontend-beta.*/wanderlust-frontend-beta:${params.FRONTEND_DOCKER_TAG}/g frontend.yaml
                         """
                     }
-                    
                 }
             }
         }
@@ -56,7 +55,7 @@ pipeline {
         stage("Git: Code update and push to GitHub"){
             steps{
                 script{
-                    withCredentials([gitUsernamePassword(credentialsId: 'Github-cred', gitToolName: 'Default')]) {
+                    withCredentials([gitUsernamePassword(credentialsId: 'GitHubCred', gitToolName: 'Default')]) {
                         sh '''
                         echo "Checking repository status: "
                         git status
@@ -64,17 +63,19 @@ pipeline {
                         echo "Adding changes to git: "
                         git add .
                         
-                        echo "Commiting changes: "
-                        git commit -m "Updated environment variables"
+                        echo "Commiting changes: 
+                        git commit -m "Updated environment variables""
                         
-                        echo "Pushing changes to github: "
-                        git push https://github.com/LondheShubham153/Wanderlust-Mega-Project.git main
+                        echo "Pushing changes to github: 
+                        git push https://github.com/saurabh12571257/Wanderlust-Mega-Project.git main"
                     '''
                     }
                 }
             }
         }
     }
+
+
   post {
         success {
             script {
@@ -96,7 +97,7 @@ pipeline {
                     </body>
                     </html>
             """,
-            to: 'trainwithshubham@gmail.com',
+            to: 'davesaurabh59@gmail.com',
             mimeType: 'text/html'
             }
         }
@@ -117,7 +118,7 @@ pipeline {
                     </body>
                     </html>
             """,
-            to: 'trainwithshubham@gmail.com',
+            to: 'davesaurabh59@gmail.com',
             mimeType: 'text/html'
             }
         }
