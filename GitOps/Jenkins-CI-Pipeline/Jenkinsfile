@@ -1,0 +1,136 @@
+pipeline {
+    agent {
+        label 'Node'
+    }
+
+    parameters {
+        string(
+            name: 'FRONTEND_DOCKER_TAG',
+            defaultValue: '',
+            description: 'Frontend Docker image tag'
+        )
+        string(
+            name: 'BACKEND_DOCKER_TAG',
+            defaultValue: '',
+            description: 'Backend Docker image tag'
+        )
+    }
+
+    stages {
+
+        stage('Workspace Cleanup') {
+            steps {
+                cleanWs()
+            }
+        }
+
+        stage('Git: Code Checkout') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: 'refs/heads/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/AnirbanB13/Wanderlust-Mega-Project.git',
+                        credentialsId: 'Github-cred'
+                    ]]
+                ])
+            }
+        }
+
+        stage('Verify: Docker Image Tags') {
+            steps {
+                script {
+                    if (!params.FRONTEND_DOCKER_TAG?.trim()) {
+                        error "FRONTEND_DOCKER_TAG is empty"
+                    }
+                    if (!params.BACKEND_DOCKER_TAG?.trim()) {
+                        error "BACKEND_DOCKER_TAG is empty"
+                    }
+
+                    echo "Frontend Tag: ${params.FRONTEND_DOCKER_TAG}"
+                    echo "Backend Tag: ${params.BACKEND_DOCKER_TAG}"
+                }
+            }
+        }
+
+        stage('Update: Kubernetes Manifests') {
+            steps {
+                script {
+                    sh """
+                        sed -i 's|wanderlust-backend-beta:.*|wanderlust-backend-beta:${params.BACKEND_DOCKER_TAG}|g' kubernetes/backend.yaml
+                        sed -i 's|wanderlust-frontend-beta:.*|wanderlust-frontend-beta:${params.FRONTEND_DOCKER_TAG}|g' kubernetes/frontend.yaml
+                    """
+                }
+            }
+        }
+
+        stage('Git: Commit and Push Changes') {
+            steps {
+                withCredentials([
+                    gitUsernamePassword(
+                        credentialsId: 'Github-cred',
+                        gitToolName: 'Default'
+                    )
+                ]) {
+                    sh '''
+                        git status
+
+                        # Ensure we are on main branch
+                        git checkout -B main
+
+                        git add .
+
+                        git commit -m "Update Docker image tags" || echo "No changes to commit"
+
+                        # Push current HEAD to main
+                        git push origin HEAD:main
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+
+        success {
+            emailext(
+                attachLog: true,
+                from: 'anirbanbanerjeeuv@gmail.com',
+                to: 'anirbanbanerjeeuv@gmail.com',
+                subject: "✅ Wanderlust Deployment Successful - Build #${env.BUILD_NUMBER}",
+                mimeType: 'text/html',
+                body: """
+                <html>
+                <body>
+                    <h2 style="color:green;">Deployment Successful</h2>
+                    <p><b>Job:</b> ${env.JOB_NAME}</p>
+                    <p><b>Build:</b> ${env.BUILD_NUMBER}</p>
+                    <p><b>URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                </body>
+                </html>
+                """
+            )
+        }
+
+        failure {
+            emailext(
+                attachLog: true,
+                from: 'anirbanbanerjeeuv@gmail.com',
+                to: 'anirbanbanerjeeuv@gmail.com',
+                subject: "❌ Wanderlust Deployment Failed - Build #${env.BUILD_NUMBER}",
+                mimeType: 'text/html',
+                body: """
+                <html>
+                <body>
+                    <h2 style="color:red;">Deployment Failed</h2>
+                    <p><b>Job:</b> ${env.JOB_NAME}</p>
+                    <p><b>Build:</b> ${env.BUILD_NUMBER}</p>
+                    <p>Please check Jenkins logs.</p>
+                </body>
+                </html>
+                """
+            )
+        }
+    }
+}
+

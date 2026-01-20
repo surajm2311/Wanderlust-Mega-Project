@@ -1,0 +1,150 @@
+pipeline {
+    agent { label 'Node' }
+
+    environment {
+        SONAR_HOME = tool 'Sonar'
+    }
+
+    parameters {
+        string(
+            name: 'FRONTEND_DOCKER_TAG',
+            defaultValue: '',
+            description: 'Frontend Docker image tag'
+        )
+        string(
+            name: 'BACKEND_DOCKER_TAG',
+            defaultValue: '',
+            description: 'Backend Docker image tag'
+        )
+    }
+
+    stages {
+
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    if (!params.FRONTEND_DOCKER_TAG || !params.BACKEND_DOCKER_TAG) {
+                        error('FRONTEND_DOCKER_TAG and BACKEND_DOCKER_TAG must be provided')
+                    }
+                }
+            }
+        }
+
+        stage('Workspace Cleanup') {
+            steps {
+                cleanWs()
+            }
+        }
+
+        stage('Git: Code Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/AnirbanB13/Wanderlust-Mega-Project.git'
+            }
+        }
+
+        stage('Trivy: Filesystem Scan') {
+            steps {
+                sh '''
+                    trivy fs \
+                      --severity HIGH,CRITICAL \
+                      --exit-code 0 \
+                      .
+                '''
+            }
+        }
+
+        stage('SonarQube: Code Analysis') {
+            steps {
+                withSonarQubeEnv('Sonar') {
+                    sh '''
+                        ${SONAR_HOME}/bin/sonar-scanner \
+                          -Dsonar.projectKey=wanderlust \
+                          -Dsonar.projectName=wanderlust \
+                          -Dsonar.sources=.
+                    '''
+                }
+            }
+        }
+
+        stage('SonarQube: Quality Gate') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Export Environment Variables') {
+            parallel {
+
+                stage('Backend Env Setup') {
+                    steps {
+                        dir('Automations') {
+                            sh 'bash updatebackendnew.sh'
+                        }
+                    }
+                }
+
+                stage('Frontend Env Setup') {
+                    steps {
+                        dir('Automations') {
+                            sh 'bash updatefrontendnew.sh'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Docker: Build Images') {
+            steps {
+                sh """
+                    docker build -t anirbanb13/wanderlust-backend-beta:${params.BACKEND_DOCKER_TAG} backend
+                    docker build -t anirbanb13/wanderlust-frontend-beta:${params.FRONTEND_DOCKER_TAG} frontend
+                """
+            }
+        }
+
+        stage('Docker: Push Images') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'DockerHub-cred',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push anirbanb13/wanderlust-backend-beta:${BACKEND_DOCKER_TAG}
+                        docker push anirbanb13/wanderlust-frontend-beta:${FRONTEND_DOCKER_TAG}
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+
+        success {
+            echo '✅ Wanderlust CD Pipeline completed successfully'
+
+            build job: 'Wanderlust-CI',
+                parameters: [
+                    string(
+                        name: 'FRONTEND_DOCKER_TAG',
+                        value: params.FRONTEND_DOCKER_TAG
+                    ),
+                    string(
+                        name: 'BACKEND_DOCKER_TAG',
+                        value: params.BACKEND_DOCKER_TAG
+                    )
+                ]
+        }
+
+        failure {
+            echo '❌ Wanderlust CD Pipeline Failed'
+        }
+    }
+}
+
