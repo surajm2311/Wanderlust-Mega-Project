@@ -3,10 +3,31 @@ kind: PersistentVolumeClaim
 metadata:
   name: mongo-pvc
   namespace: wanderlust
+  labels:
+    app: mongo
+    component: database
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: ""
+  storageClassName: ""  # Empty string binds to manual PV
   resources:
     requests:
       storage: 5Gi
+  volumeName: mongo-pv  # Explicitly bind to specific PV
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: wanderlust
+  labels:
+    app: redis
+    component: cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""  # Empty string binds to manual PV
+  resources:
+    requests:
+      storage: 2Gi
+  volumeName: redis-pv  # Explicitly bind to specific PV

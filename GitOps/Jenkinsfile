@@ -1,6 +1,27 @@
 @Library('Shared') _
 pipeline {
-    agent {label 'Node'}
+    agent any
+    
+    environment {
+        // Git Configuration
+        GIT_REPO_URL = "${env.GIT_REPO_URL ?: 'https://github.com/Gaurav9197/Wanderlust-Mega-Project.git'}"
+        GIT_BRANCH = "${env.GIT_BRANCH ?: 'main'}"
+        GIT_CREDENTIALS_ID = "${env.GIT_CREDENTIALS_ID ?: 'Github-cred'}"
+        
+        // Docker Image Configuration
+        BACKEND_IMAGE_NAME = "${env.BACKEND_IMAGE_NAME ?: 'wanderlust-backend-beta'}"
+        FRONTEND_IMAGE_NAME = "${env.FRONTEND_IMAGE_NAME ?: 'wanderlust-frontend-beta'}"
+        
+        // Directory Configuration
+        KUBERNETES_DIR = "${env.KUBERNETES_DIR ?: 'kubernetes'}"
+        
+        // Email Configuration
+        EMAIL_FROM = "${env.EMAIL_FROM ?: 'gauravgorle9197@gmail.com'}"
+        EMAIL_TO = "${env.EMAIL_TO ?: 'gauravgorle9197@gmail.com'}"
+        
+        // Git Commit Configuration
+        COMMIT_MESSAGE = "${env.COMMIT_MESSAGE ?: 'Updated Kubernetes manifests with new Docker image tags'}"
+    }
     
     parameters {
         string(name: 'FRONTEND_DOCKER_TAG', defaultValue: '', description: 'Frontend Docker tag of the image built by the CI job')
@@ -19,7 +40,7 @@ pipeline {
         stage('Git: Code Checkout') {
             steps {
                 script{
-                    code_checkout("https://github.com/LondheShubham153/Wanderlust-Mega-Project.git","main")
+                    code_checkout("${env.GIT_REPO_URL}","${env.GIT_BRANCH}")
                 }
             }
         }
@@ -27,8 +48,16 @@ pipeline {
         stage('Verify: Docker Image Tags') {
             steps {
                 script{
-                    echo "FRONTEND_DOCKER_TAG: ${params.FRONTEND_DOCKER_TAG}"
-                    echo "BACKEND_DOCKER_TAG: ${params.BACKEND_DOCKER_TAG}"
+                    // Use parameters if provided, otherwise try env vars
+                    env.BACKEND_DOCKER_TAG = params.BACKEND_DOCKER_TAG ?: env.BACKEND_DOCKER_TAG ?: ''
+                    env.FRONTEND_DOCKER_TAG = params.FRONTEND_DOCKER_TAG ?: env.FRONTEND_DOCKER_TAG ?: ''
+                    
+                    if (!env.BACKEND_DOCKER_TAG || !env.FRONTEND_DOCKER_TAG) {
+                        error("BACKEND_DOCKER_TAG and FRONTEND_DOCKER_TAG must be provided either as parameters or environment variables.")
+                    }
+                    
+                    echo "Backend Docker Tag: ${env.BACKEND_DOCKER_TAG}"
+                    echo "Frontend Docker Tag: ${env.FRONTEND_DOCKER_TAG}"
                 }
             }
         }
@@ -37,18 +66,61 @@ pipeline {
         stage("Update: Kubernetes manifests"){
             steps{
                 script{
-                    dir('kubernetes'){
+                    def backendUpdated = false
+                    def frontendUpdated = false
+                    
+                    dir("${env.KUBERNETES_DIR}"){
+                        // Backup original files
+                        sh "cp backend.yaml backend.yaml.bak"
+                        sh "cp frontend.yaml frontend.yaml.bak"
+                        
+                        // Update backend manifest
                         sh """
-                            sed -i -e s/wanderlust-backend-beta.*/wanderlust-backend-beta:${params.BACKEND_DOCKER_TAG}/g backend.yaml
+                            sed -i -e 's|${env.BACKEND_IMAGE_NAME}:[^[:space:]]*|${env.BACKEND_IMAGE_NAME}:${env.BACKEND_DOCKER_TAG}|g' backend.yaml
                         """
+                        
+                        // Update frontend manifest
+                        sh """
+                            sed -i -e 's|${env.FRONTEND_IMAGE_NAME}:[^[:space:]]*|${env.FRONTEND_IMAGE_NAME}:${env.FRONTEND_DOCKER_TAG}|g' frontend.yaml
+                        """
+                        
+                        // Verify changes were made
+                        def backendDiff = sh(
+                            script: "diff backend.yaml backend.yaml.bak || true",
+                            returnStdout: true
+                        ).trim()
+                        
+                        def frontendDiff = sh(
+                            script: "diff frontend.yaml frontend.yaml.bak || true",
+                            returnStdout: true
+                        ).trim()
+                        
+                        backendUpdated = backendDiff != ''
+                        frontendUpdated = frontendDiff != ''
+                        
+                        if (backendUpdated) {
+                            echo "Backend manifest updated successfully"
+                            echo "Backend changes: ${backendDiff}"
+                        } else {
+                            echo "Warning: No changes detected in backend.yaml"
+                        }
+                        
+                        if (frontendUpdated) {
+                            echo "Frontend manifest updated successfully"
+                            echo "Frontend changes: ${frontendDiff}"
+                        } else {
+                            echo "Warning: No changes detected in frontend.yaml"
+                        }
+                        
+                        // Cleanup backup files
+                        sh "rm -f *.bak"
                     }
                     
-                    dir('kubernetes'){
-                        sh """
-                            sed -i -e s/wanderlust-frontend-beta.*/wanderlust-frontend-beta:${params.FRONTEND_DOCKER_TAG}/g frontend.yaml
-                        """
+                    if (!backendUpdated && !frontendUpdated) {
+                        echo "No changes detected in Kubernetes manifests. Skipping Git commit."
+                        currentBuild.result = 'SUCCESS'
+                        return
                     }
-                    
                 }
             }
         }
@@ -56,20 +128,44 @@ pipeline {
         stage("Git: Code update and push to GitHub"){
             steps{
                 script{
-                    withCredentials([gitUsernamePassword(credentialsId: 'Github-cred', gitToolName: 'Default')]) {
-                        sh '''
-                        echo "Checking repository status: "
-                        git status
-                    
-                        echo "Adding changes to git: "
-                        git add .
+                    withCredentials([gitUsernamePassword(credentialsId: "${env.GIT_CREDENTIALS_ID}", gitToolName: 'Default')]) {
+                        // Configure git
+                        sh """
+                            git config user.name "Jenkins CI/CD"
+                            git config user.email "jenkins@wanderlust.com"
+                        """
                         
-                        echo "Commiting changes: "
-                        git commit -m "Updated environment variables"
+                        // Check for changes
+                        def gitStatus = sh(
+                            script: "git status --porcelain",
+                            returnStdout: true
+                        ).trim()
                         
-                        echo "Pushing changes to github: "
-                        git push https://github.com/LondheShubham153/Wanderlust-Mega-Project.git main
-                    '''
+                        if (!gitStatus) {
+                            echo "No changes to commit. Skipping Git push."
+                            return
+                        }
+                        
+                        echo "Changes detected:"
+                        sh "git status"
+                        
+                        // Add changes
+                        sh "git add ${env.KUBERNETES_DIR}/backend.yaml ${env.KUBERNETES_DIR}/frontend.yaml"
+                        
+                        // Commit with detailed message
+                        def commitMsg = "${env.COMMIT_MESSAGE}\n\nBackend Image: ${env.BACKEND_IMAGE_NAME}:${env.BACKEND_DOCKER_TAG}\nFrontend Image: ${env.FRONTEND_IMAGE_NAME}:${env.FRONTEND_DOCKER_TAG}\nBuild Number: ${env.BUILD_NUMBER}"
+                        sh """
+                            git commit -m "${commitMsg.replaceAll('"', '\\"')}"
+                        """
+                        
+                        // Push to GitHub
+                        sh """
+                            echo "Pushing changes to ${env.GIT_BRANCH} branch..."
+                            git push ${env.GIT_REPO_URL} ${env.GIT_BRANCH}
+                        """
+                        
+                        echo "Successfully pushed changes to Git repository"
+                        echo "ArgoCD will automatically detect and sync the changes"
                     }
                 }
             }
@@ -79,7 +175,7 @@ pipeline {
         success {
             script {
                 emailext attachLog: true,
-                from: 'trainwithshubham@gmail.com',
+                from: "${env.EMAIL_FROM}",
                 subject: "Wanderlust Application has been updated and deployed - '${currentBuild.result}'",
                 body: """
                     <html>
@@ -93,18 +189,26 @@ pipeline {
                         <div style="background-color: #87CEEB; padding: 10px; margin-bottom: 10px;">
                             <p style="color: black; font-weight: bold;">URL: ${env.BUILD_URL}</p>
                         </div>
+                        <div style="background-color: #DDA0DD; padding: 10px; margin-bottom: 10px;">
+                            <p style="color: black; font-weight: bold;">Backend Tag: ${env.BACKEND_DOCKER_TAG}</p>
+                            <p style="color: black; font-weight: bold;">Frontend Tag: ${env.FRONTEND_DOCKER_TAG}</p>
+                        </div>
+                        <div style="background-color: #F0E68C; padding: 10px; margin-bottom: 10px;">
+                            <p style="color: black; font-weight: bold;">Status: Kubernetes manifests updated and pushed to Git</p>
+                            <p style="color: black;">ArgoCD will automatically sync the changes to the cluster.</p>
+                        </div>
                     </body>
                     </html>
             """,
-            to: 'trainwithshubham@gmail.com',
+            to: "${env.EMAIL_TO}",
             mimeType: 'text/html'
             }
         }
       failure {
             script {
                 emailext attachLog: true,
-                from: 'trainwithshubham@gmail.com',
-                subject: "Wanderlust Application build failed - '${currentBuild.result}'",
+                from: "${env.EMAIL_FROM}",
+                subject: "Wanderlust Application deployment failed - '${currentBuild.result}'",
                 body: """
                     <html>
                     <body>
@@ -114,10 +218,13 @@ pipeline {
                         <div style="background-color: #90EE90; padding: 10px; margin-bottom: 10px;">
                             <p style="color: black; font-weight: bold;">Build Number: ${env.BUILD_NUMBER}</p>
                         </div>
+                        <div style="background-color: #FF6B6B; padding: 10px; margin-bottom: 10px;">
+                            <p style="color: black; font-weight: bold;">Build URL: ${env.BUILD_URL}</p>
+                        </div>
                     </body>
                     </html>
             """,
-            to: 'trainwithshubham@gmail.com',
+            to: "${env.EMAIL_TO}",
             mimeType: 'text/html'
             }
         }

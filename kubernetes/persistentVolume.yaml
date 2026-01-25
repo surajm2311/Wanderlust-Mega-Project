@@ -2,12 +2,38 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: mongo-pv
-  namespace: wanderlust
+  labels:
+    app: mongo
+    component: database
+    type: local
 spec:
   capacity:
     storage: 5Gi
   volumeMode: Filesystem
   accessModes:
     - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain  # Retain data on PVC deletion
+  storageClassName: ""  # Empty string means manual PV binding
   hostPath:
-    path: /data/db
+    path: /data/mongo-db  # Changed from /data/db to be more specific
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-pv
+  labels:
+    app: redis
+    component: cache
+    type: local
+spec:
+  capacity:
+    storage: 2Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain  # Retain data on PVC deletion
+  storageClassName: ""  # Empty string means manual PV binding
+  hostPath:
+    path: /data/redis-data
+    type: DirectoryOrCreate

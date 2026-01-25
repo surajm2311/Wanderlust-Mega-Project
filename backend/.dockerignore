@@ -1,0 +1,50 @@
+# Dependencies
+node_modules
+npm-debug.log
+
+# Tests
+tests
+*.test.js
+coverage
+.nyc_output
+
+# Development files
+.env
+.env.local
+.env.development
+.git
+.gitignore
+.eslintrc.json
+.eslintignore
+.prettierrc
+.prettierignore
+
+# Documentation
+README.md
+*.md
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Build artifacts
+dist
+build
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# CI/CD
+.github
+.gitlab-ci.yml
+Jenkinsfile

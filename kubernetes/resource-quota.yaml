@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: wanderlust-resource-quota
+  namespace: wanderlust
+  labels:
+    app: wanderlust
+    component: resource-management
+spec:
+  hard:
+    # Compute Resources
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    # Storage Resources
+    persistentvolumeclaims: "4"
+    requests.storage: 10Gi
+    # Object Counts
+    pods: "20"
+    services: "10"
+    secrets: "10"
+    configmaps: "10"
+    # Replication Controllers
+    replicationcontrollers: "5"
+    # Deployments
+    deployments.apps: "5"
+    replicasets.apps: "10"
+    # Jobs
+    jobs.batch: "5"
+    cronjobs.batch: "2"

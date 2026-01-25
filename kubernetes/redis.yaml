@@ -5,8 +5,12 @@ metadata:
   namespace: wanderlust
   labels:
     app: redis
+    component: cache
+    version: v1
 spec:
-  replicas: 1
+  replicas: 1  # Redis single instance - for HA consider Redis Sentinel or Cluster mode
+  strategy:
+    type: Recreate  # Recreate strategy for stateful apps with persistent storage
   selector:
     matchLabels:
       app: redis
@@ -15,29 +19,150 @@ spec:
       name: redis
       labels:
         app: redis
+        component: cache
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "6379"
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999  # Redis user ID
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: redis
-          image: redis
+          image: redis:7.2-alpine  # Pinned version for production
+          imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 6379
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          command:
+            - redis-server
+            - --appendonly
+            - "yes"
+            - --maxmemory
+            - "256mb"
+            - --maxmemory-policy
+            - "allkeys-lru"
+            - --save
+            - "900 1"
+            - --save
+            - "300 10"
+            - --save
+            - "60 10000"
+            - --requirepass
+            - "${REDIS_PASSWORD}"
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: password
+                  optional: true
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "redis-cli -a ${REDIS_PASSWORD} ping || redis-cli ping"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "redis-cli -a ${REDIS_PASSWORD} ping || redis-cli ping"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false  # Redis needs write access for AOF
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - SETGID
+                - SETUID
           volumeMounts:
-            - name: mongo-storage
-              mountPath: /var/lib/redis/dump.rdb
+            - name: redis-data
+              mountPath: /data
       volumes:
-        - name: mongo-storage
+        - name: redis-data
           persistentVolumeClaim:
-            claimName: mongo-pvc
+            claimName: redis-pvc
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: redis-service
   namespace: wanderlust
+  labels:
+    app: redis
+    component: cache
 spec:
+  type: ClusterIP  # Internal service - not exposed externally for security
   selector:
     app: redis
   ports:
-    - port: 6379
+    - name: redis
+      port: 6379
       targetPort: 6379
       protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: wanderlust
+  labels:
+    app: redis
+    component: cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""  # Uses default storage class or empty for manual PV
+  resources:
+    requests:
+      storage: 2Gi  # Redis doesn't need as much storage as MongoDB
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret
+  namespace: wanderlust
+type: Opaque
+stringData:
+  password: changeme  # ⚠️ CHANGE THIS IN PRODUCTION! Use strong password
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: wanderlust
+spec:
+  minAvailable: 1  # Ensure Redis is always available
+  selector:
+    matchLabels:
+      app: redis
