@@ -27,6 +27,14 @@ resource "aws_security_group" "allow_user_to_connect" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+egress {
+  description = "Allow outbound TCP traffic on ports 3000-32767"
+  from_port   = 3000
+  to_port     = 32767
+  protocol    = "tcp"
+  cidr_blocks = ["0.0.0.0/0"]
+}
+
   ingress {
     description = "port 80 allow"
     from_port   = 80
@@ -42,6 +50,36 @@ resource "aws_security_group" "allow_user_to_connect" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+ingress {
+    description = "port 6379 allow"
+    from_port   = 6379
+    to_port     = 6379
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+ingress {
+    description = "port 465 SMTPS  allow"
+    from_port   = 465
+    to_port     = 465
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+ingress {
+    description = "port range allow"
+    from_port   = 3000
+    to_port     = 10000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+ingress {
+    description = "port 6443 allow"
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+
 
   tags = {
     Name = "mysecurity"

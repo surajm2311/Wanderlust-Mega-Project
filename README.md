@@ -217,26 +217,32 @@ sudo apt-get update -y
 sudo apt-get install trivy -y
 ```
 #
-- <b id="Argo">Install and Configure ArgoCD (Master Machine)</b>
-  - <b>Create argocd namespace</b>
+- <b id="Argo">⚙️ ArgoCD Declarative Setup(Master Machine)</b>
+  - <b>Install ArgoCD</b>
   ```bash
   kubectl create namespace argocd
-  ```
-  - <b>Apply argocd manifest</b>
+
+kubectl apply -n argocd \
+-f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+  - <b>Access ArgoCD UIt</b>
   ```bash
-  kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-  ```
-  - <b>Make sure all pods are running in argocd namespace</b>
+  kubectl port-forward svc/argocd-server -n argocd 8080:443
+
+  - <b>Open:</b>
   ```bash
-  watch kubectl get pods -n argocd
+  https://localhost:8080
+  
   ```
-  - <b>Install argocd CLI</b>
+  - <b>IGet admin password:</b>
   ```bash
-  sudo curl --silent --location -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/v2.4.7/argocd-linux-amd64
-  ```
-  - <b>Provide executable permission</b>
+  kubectl get secret argocd-initial-admin-secret \
+-n argocd -o jsonpath="{.data.password}" | base64 -d
+
+  - <b>Apply argocd Root Application</b>
   ```bash
-  sudo chmod +x /usr/local/bin/argocd
+ kubectl apply -f argocd/root-app.yaml
+
   ```
   - <b>Check argocd services</b>
   ```bash
