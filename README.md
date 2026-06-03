@@ -41,9 +41,9 @@ Perfect for:
 
 # Project Deployment Flow
 
-> Add your DevSecOps + GitOps workflow image here
 
-![Deployment Flow](Assets/devsecops-gitops-flow.gif)
+<img width="900" height="576" alt="DevSecOps_GitOps_Showcase_Enhanced" src="https://github.com/user-attachments/assets/d00d6f3f-5adf-4914-a8f6-a2b1a8e36418" />
+
 
 ---
 
@@ -88,7 +88,17 @@ Perfect for:
 
 > Add architecture diagram here
 
-![Architecture Diagram](Assets/architecture-diagram.png)
+VM1
+ ├ Jenkins
+ ├ SonarQube
+ ├ Docker
+ └ K8s Control Plane
+
+VM2
+ ├ Worker Node
+ ├ ArgoCD
+ ├ Prometheus
+ └ Grafana
 
 ---
 
