@@ -1,20 +1,6 @@
 # Wanderlust Local DevSecOps & GitOps Project 🚀
 
-![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
-
-![Jenkins](https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white)
-
-![ArgoCD](https://img.shields.io/badge/ArgoCD-EF7B4D?style=for-the-badge&logo=argo&logoColor=white)
-
-![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
-
-![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)
-
-![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-
-![SonarQube](https://img.shields.io/badge/SonarQube-4E9BCD?style=for-the-badge&logo=sonarqube&logoColor=white)
-
-![Trivy](https://img.shields.io/badge/Trivy-1904DA?style=for-the-badge)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)  ![Jenkins](https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white)  ![ArgoCD](https://img.shields.io/badge/ArgoCD-EF7B4D?style=for-the-badge&logo=argo&logoColor=white)  ![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)  ![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)  ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)  ![SonarQube](https://img.shields.io/badge/SonarQube-4E9BCD?style=for-the-badge&logo=sonarqube&logoColor=white)  ![Trivy](https://img.shields.io/badge/Trivy-1904DA?style=for-the-badge)
 
 Deploy a complete production-style DevSecOps + GitOps pipeline on local infrastructure without AWS.
 
@@ -35,7 +21,8 @@ Perfect for:
 
 > Add your final project architecture screenshot here
 
-![Project Architecture](Assets/project-architecture.png)
+<img width="1536" height="1024" alt="Wnderlust-preview" src="https://github.com/user-attachments/assets/90fb5118-9f2b-436f-8325-e5c83982c9c1" />
+
 
 ---
 
@@ -263,13 +250,6 @@ kubectl get pods -A
 
 ---
 
-## Prometheus Targets
-
-> Add screenshot
-
-![Prometheus Targets](Assets/prometheus-targets.png)
-
----
 
 ## Grafana Dashboard
 
@@ -348,14 +328,49 @@ kubeadm join ...
 ## Step 4: Install Jenkins
 
 ```bash
-sudo dnf install java-17-openjdk -y
+# Install Java 21
+
+sudo dnf install -y fontconfig java-21-openjdk
+
+# Verify the installation
+java -version
+
+# Add the Jenkins repository
+sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/rpm-stable/jenkins.repo
+
+# Import the Jenkins GPG key
+sudo rpm --import https://pkg.jenkins.io/rpm-stable/jenkins.io-2026.key
+
 ```
 
 Install Jenkins and start service.
 
 ```bash
-systemctl enable jenkins
-systemctl start jenkins
+# Install Jenkins
+sudo dnf install -y jenkins
+
+# Start and enable Jenkins
+sudo systemctl enable --now jenkins
+
+# Check the status
+sudo systemctl status jenkins
+```
+
+Configure Firewall
+
+```bash
+# Jenkins runs on port 8080 by default
+sudo firewall-cmd --permanent --add-port=8080/tcp
+sudo firewall-cmd --reload
+
+# Verify the port is open
+sudo firewall-cmd --list-ports
+```
+
+Get the Initial Admin Paswword
+```bash
+# Display the initial admin password
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 ```
 
 ---
@@ -380,7 +395,16 @@ Configure through Jenkins plugin manager.
 ## Step 7: Install Trivy
 
 ```bash
-sudo dnf install trivy -y
+cat << EOF | sudo tee -a /etc/yum.repos.d/trivy.repo
+[trivy]
+name=Trivy repository
+baseurl=https://aquasecurity.github.io/trivy-repo/rpm/releases/\$basearch/
+gpgcheck=1
+enabled=1
+gpgkey=https://aquasecurity.github.io/trivy-repo/rpm/public.key
+EOF
+sudo yum -y update
+sudo yum -y install trivy
 ```
 
 ---
