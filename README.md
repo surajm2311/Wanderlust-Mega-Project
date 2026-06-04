@@ -19,7 +19,6 @@ Perfect for:
 
 ## 📸 Project Preview
 
-> Add your final project architecture screenshot here
 
 <img width="1536" height="1024" alt="Wnderlust-preview" src="https://github.com/user-attachments/assets/90fb5118-9f2b-436f-8325-e5c83982c9c1" />
 
